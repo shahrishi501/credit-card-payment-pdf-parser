@@ -22,7 +22,7 @@ func StartServer() {
 
 
 func parsePDFHandler(c *gin.Context) {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<20) // 32 MB
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<20)
 
 	password := c.PostForm("password")
 	if password == "" {
@@ -33,7 +33,6 @@ func parsePDFHandler(c *gin.Context) {
 		return
 	}
 
-	// Retrieve file
 	file, err := c.FormFile("pdf")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, models.ParseResponse{
@@ -51,7 +50,6 @@ func parsePDFHandler(c *gin.Context) {
 		return
 	}
 
-	// Save file temporarily
 	tempDir := "./tmp"
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ParseResponse{
@@ -64,7 +62,6 @@ func parsePDFHandler(c *gin.Context) {
 	temp, err := os.CreateTemp(tempDir, fmt.Sprintf("upload_*_%s", safeName))
 
 	if err != nil {
-        // log actual error and return
         fmt.Printf("failed to create temp file: %v\n", err)
         c.JSON(http.StatusInternalServerError, models.ParseResponse{
             Success: false,
@@ -77,7 +74,6 @@ func parsePDFHandler(c *gin.Context) {
 	temp.Close()
 
 	 if err := c.SaveUploadedFile(file, tempPath); err != nil {
-        // log the real error to server output for debugging
         fmt.Printf("failed to save uploaded file to %s: %v\n", tempPath, err)
         c.JSON(http.StatusInternalServerError, models.ParseResponse{
             Success: false,
@@ -85,9 +81,8 @@ func parsePDFHandler(c *gin.Context) {
         })
         return
     }
-    defer os.Remove(tempPath) // Clean up
+    defer os.Remove(tempPath) 
 
-	// Process PDF
 	result, err := utils.ProcessPDF(tempPath, password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ParseResponse{
@@ -99,17 +94,14 @@ func parsePDFHandler(c *gin.Context) {
 
 	c.Header("Content-Type", "application/json")
 
-	// 🧹 Clean Gemini output (remove ```json fences)
 	clean := strings.TrimSpace(result)
 	clean = strings.TrimPrefix(clean, "```json")
 	clean = strings.TrimPrefix(clean, "```JSON")
 	clean = strings.TrimSuffix(clean, "```")
 	clean = strings.TrimSpace(clean)
 
-	// Try to decode
 	var parsed map[string]interface{}
 	if err := json.Unmarshal([]byte(clean), &parsed); err != nil {
-		// If parsing fails, return raw text
 		c.JSON(http.StatusOK, gin.H{"success": true, "data": clean})
 		return
 	}
